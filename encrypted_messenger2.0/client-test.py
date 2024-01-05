@@ -113,9 +113,6 @@ if server_pub_key:
                 break
             send_new_message(s, message, server_pub_key)
 
-            # Clean up
-            listen_thread.join()
-            s.close()
 
     except Exception as e:
         logging.error(f"Connection error: {e}")

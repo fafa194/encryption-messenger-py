@@ -5,7 +5,6 @@ import threading
 import datetime
 import json
 
-
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -18,6 +17,7 @@ RSApubKey, RSAprivKey = rsa.newkeys(2048)
 
 # Export the public key in PEM format for easier handling
 pubKey_export = RSApubKey.save_pkcs1(format="PEM")
+
 
 def get_current_time():
     return datetime.datetime.now()
@@ -38,6 +38,7 @@ def create_json_dumped_message(text):
 def encrypt_message(text, public_key):
     encrypted_message = rsa.encrypt(text.encode(), public_key)
     return encrypted_message
+
 
 # Function to decrypt a message using the private key
 def decrypt_message(encrypted_message):
@@ -68,6 +69,7 @@ def exchange_pub_rsa():
         logging.error(f"Error during key exchange: {ex}")
         return None
 
+
 def listen_for_message(conn):
     while True:
         try:
@@ -83,22 +85,37 @@ def listen_for_message(conn):
             logging.error(f"Error receiving message: {e}")
             break  # Break the loop to end the thread on error
 
-def send_new_message(conn, text, server_pub_key):
-    try:
-        message_encrypted = encrypt_message(create_json_dumped_message(text), server_pub_key)
-        conn.sendall(message_encrypted)
-    except Exception as message_error:
-        logging.error(f"Message error: {message_error}")
+
+def send_new_message(conn, server_pub_key):
+    while True:
+        text = input("Enter a message to send (type 'exit' to quit): ")
+        if text.lower() == 'exit':
+            break
+        try:
+            message_encrypted = encrypt_message(create_json_dumped_message(text), server_pub_key)
+            conn.sendall(message_encrypted)
+        except Exception as message_error:
+            logging.error(f"Message error: {message_error}")
+            break
+
 
 def handle_client(conn, addr, client_pub_key):
     logging.info(f"Connected by {addr}")
+
+    # Start the listening thread
     listen_thread = threading.Thread(target=listen_for_message, args=(conn,))
     listen_thread.start()
 
-    # Example of sending a welcome message to the client
-    send_new_message(conn, "Welcome to the server!", client_pub_key)
-    listen_thread.join()
+    # Start the sending thread
+    send_thread = threading.Thread(target=send_new_message, args=(conn, client_pub_key))
+    send_thread.start()
 
+    # Wait for both threads to complete
+    listen_thread.join()
+    send_thread.join()
+
+
+# Program starts
 client_pub_key = exchange_pub_rsa()
 
 if client_pub_key:
@@ -109,7 +126,7 @@ if client_pub_key:
         server_socket.listen()
         logging.info("Server started. Waiting for messages...")
 
-        while True:  # Loop to accept multiple clients
+        while True:
             conn, addr = server_socket.accept()
             client_thread = threading.Thread(target=handle_client, args=(conn, addr, client_pub_key))
             client_thread.start()
